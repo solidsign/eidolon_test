@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Server;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -36,6 +37,8 @@ namespace Analytics
     
     public class AnalyticsService : MonoBehaviour, IAnalyticsService
     {
+        [SerializeField] private ServerBase _server; // Засунул сюда, чтобы не мудрить с DI и иметь возможность тестирования
+        [Space]
         [SerializeField] private float _cooldownBeforeSendSeconds = 3f;
         [SerializeField] private string _serverUrl; 
         // по хорошему это должно быть из внешнего конфига, но т.к вы написали,
@@ -83,17 +86,7 @@ namespace Analytics
 
         private IEnumerator TrySendBatch(AnalyticServiceEventsBatch requestData, Action onSuccess, Action onError)
         {
-            using var request = UnityWebRequest.Post(_serverUrl, JsonConvert.SerializeObject(requestData));
-            yield return request.SendWebRequest();
-            
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                onSuccess?.Invoke();
-            }
-            else
-            {
-                onError?.Invoke();
-            }
+            yield return _server.SendPostRequest(_serverUrl, requestData, onSuccess, onError);
         }
     }
 }
