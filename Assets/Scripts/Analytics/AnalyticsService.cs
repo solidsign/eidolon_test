@@ -21,9 +21,9 @@ namespace Analytics
     public readonly struct AnalyticsServiceEventData
     {
         [JsonProperty("eventName")] public readonly string EventName;
-        [JsonProperty("data")] public readonly IAnalyticsEvent Data;
+        [JsonProperty("data")] public readonly string Data;
 
-        public AnalyticsServiceEventData(string eventName, IAnalyticsEvent data)
+        public AnalyticsServiceEventData(string eventName, string data)
         {
             EventName = eventName;
             Data = data;
@@ -43,7 +43,7 @@ namespace Analytics
         // что не стоит делать никаких бутстрапов,
         // то решил сделать конфигурацию просто через сериализованное поле
 
-        private readonly AnalyticEventsBatchStorage _batchStorage = new();
+        private readonly BatchStorage<AnalyticsServiceEventData> _batchStorage = new();
         private float _lastSendTime = 0f;
 
         private void Update()
@@ -57,14 +57,14 @@ namespace Analytics
 
         public void TrackEvent(IAnalyticsEvent @event)
         {
-            _batchStorage.Store(@event);
+            _batchStorage.Store(new AnalyticsServiceEventData(@event.GetEventName(), JsonConvert.SerializeObject(@event)));
         }
 
         private IEnumerator TrySendBatch()
         {
             var (transactionId, events) = _batchStorage.Consume();
             
-            var requestData = new AnalyticServiceEventsBatch(events.Select(x => new AnalyticsServiceEventData(x.GetEventName(), x)));
+            var requestData = new AnalyticServiceEventsBatch(events);
             
             yield return TrySendBatch(requestData, 
                 onSuccess: () => _batchStorage.CommitTransaction(transactionId), 
