@@ -28,7 +28,7 @@ namespace Server
             using var request = UnityWebRequest.Post(url, JsonConvert.SerializeObject(data));
             yield return request.SendWebRequest();
             
-            if (request.result != UnityWebRequest.Result.Success)
+            if (request.result == UnityWebRequest.Result.Success && request.responseCode == 200)
             {
                 onSuccess?.Invoke();
             }
