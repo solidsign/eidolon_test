@@ -19,7 +19,7 @@ namespace Analytics
     
     public readonly struct AnalyticsServiceEventData
     {
-        [JsonProperty("eventName")] public readonly string EventName;
+        [JsonProperty("type")] public readonly string EventName;
         [JsonProperty("data")] public readonly string Data;
 
         public AnalyticsServiceEventData(string eventName, string data)
@@ -72,7 +72,11 @@ namespace Analytics
             
             yield return TrySendBatch(requestData, 
                 onSuccess: () => _batchStorage.CommitTransaction(transactionId), 
-                onError: () => _batchStorage.RollbackTransaction(transactionId));
+                onError: () =>
+                {
+                    _batchStorage.RollbackTransaction(transactionId);
+                    _currentSendRoutine = StartCoroutine(TrySendBatch(_cooldownBeforeSendSeconds)); // retry
+                });
 
             _currentSendRoutine = null;
         }

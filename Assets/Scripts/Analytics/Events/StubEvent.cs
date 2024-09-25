@@ -5,7 +5,7 @@ namespace Analytics.Events
     [MyAnalyticsEvent("StubEvent")]
     public class StubEvent : IAnalyticsEvent
     {
-        [JsonProperty("count")]
+        [MyAnalyticsProperty("count")]
         public int Count { get; private set; }
 
         [JsonConstructor]
@@ -16,6 +16,11 @@ namespace Analytics.Events
         public StubEvent(int count)
         {
             Count = count;
+        }
+
+        public override string ToString()
+        {
+            return $"count:{Count}";
         }
     }
 }
