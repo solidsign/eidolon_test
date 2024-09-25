@@ -1,16 +1,27 @@
 using System.Collections;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
 
 namespace Analytics
 {
-    public readonly struct AnalyticsServiceRequest
+    public readonly struct AnalyticServiceEventsBatch
+    {
+        [JsonProperty("events")] public readonly List<AnalyticsServiceEventData> Events;
+
+        public AnalyticServiceEventsBatch(IEnumerable<AnalyticsServiceEventData> events)
+        {
+            Events = new List<AnalyticsServiceEventData>(events);
+        }
+    }
+    
+    public readonly struct AnalyticsServiceEventData
     {
         [JsonProperty("eventName")] public readonly string EventName;
         [JsonProperty("data")] public readonly IAnalyticsEvent Data;
 
-        public AnalyticsServiceRequest(string eventName, IAnalyticsEvent data)
+        public AnalyticsServiceEventData(string eventName, IAnalyticsEvent data)
         {
             EventName = eventName;
             Data = data;
@@ -27,12 +38,12 @@ namespace Analytics
         public void TrackEvent(IAnalyticsEvent @event)
         {
             var eventName = @event.GetEventName();
-            var requestData = new AnalyticsServiceRequest(eventName, @event);
+            var requestData = new AnalyticsServiceEventData(eventName, @event);
 
-            StartCoroutine(TrySendEvent(requestData));
+            StartCoroutine(TrySendBatch(new AnalyticServiceEventsBatch(new[] { requestData })));
         }
 
-        private IEnumerator TrySendEvent(AnalyticsServiceRequest requestData)
+        private IEnumerator TrySendBatch(AnalyticServiceEventsBatch requestData)
         {
             using var request = UnityWebRequest.Post(_serverUrl, JsonConvert.SerializeObject(requestData));
             yield return request.SendWebRequest();
