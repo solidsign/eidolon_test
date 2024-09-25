@@ -36,31 +36,28 @@ namespace Analytics
     
     public class AnalyticsService : MonoBehaviour, IAnalyticsService
     {
-        [SerializeField] private float _sendPeriodSeconds = 3f;
+        [SerializeField] private float _cooldownBeforeSendSeconds = 3f;
         [SerializeField] private string _serverUrl; 
         // по хорошему это должно быть из внешнего конфига, но т.к вы написали,
         // что не стоит делать никаких бутстрапов,
         // то решил сделать конфигурацию просто через сериализованные поля
 
         private readonly BatchStorage<AnalyticsServiceEventData> _batchStorage = new();
-        private float _lastSendTime = 0f;
-
-        private void Update()
-        {
-            if (_lastSendTime + _sendPeriodSeconds > Time.time) return;
-
-            _lastSendTime = Time.time;
-            
-            if (_batchStorage.CurrentSize > 0) StartCoroutine(TrySendBatch());
-        }
+        private Coroutine _currentSendRoutine = null;
 
         public void TrackEvent(IAnalyticsEvent @event)
         {
             _batchStorage.Store(new AnalyticsServiceEventData(@event.GetEventName(), JsonConvert.SerializeObject(@event)));
+            
+            if (_currentSendRoutine != null) return;
+            
+            _currentSendRoutine = StartCoroutine(TrySendBatch(_cooldownBeforeSendSeconds));
         }
 
-        private IEnumerator TrySendBatch()
+        private IEnumerator TrySendBatch(float waitTime)
         {
+            yield return new WaitForSeconds(waitTime);
+            
             var (transactionId, events) = _batchStorage.Consume();
             
             var requestData = new AnalyticServiceEventsBatch(events);
@@ -68,6 +65,8 @@ namespace Analytics
             yield return TrySendBatch(requestData, 
                 onSuccess: () => _batchStorage.CommitTransaction(transactionId), 
                 onError: () => _batchStorage.RollbackTransaction(transactionId));
+
+            _currentSendRoutine = null;
         }
 
         private IEnumerator TrySendBatch(AnalyticServiceEventsBatch requestData, Action onSuccess, Action onError)
