@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using Analytics.Events;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -48,6 +50,7 @@ namespace Analytics
         // что не стоит делать никаких бутстрапов,
         // то решил сделать конфигурацию просто через сериализованные поля
 
+        private readonly IAnalyticsEventsFormatter _eventsFormatter = new MyAnalyticsEventsFormatter();
         private BatchStorage<AnalyticsServiceEventData> _batchStorage;
         private Coroutine _currentSendRoutine = null;
         
@@ -64,7 +67,7 @@ namespace Analytics
 
         public void TrackEvent(IAnalyticsEvent @event)
         {
-            _batchStorage.Store(new AnalyticsServiceEventData(@event.GetEventName(), JsonConvert.SerializeObject(@event)));
+            _batchStorage.Store(new AnalyticsServiceEventData(_eventsFormatter.GetEventName(@event), _eventsFormatter.Serialize(@event)));
             
             if (_currentSendRoutine != null) return;
             
