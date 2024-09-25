@@ -30,7 +30,7 @@ namespace Analytics
         private SortedList<int, BatchEntry> _uncommitedEvents;
         private readonly Dictionary<int /* transactionId */, SortedList<int, BatchEntry>> _consumedEvents = new();
         
-        private int _lastEventId = 0;
+        private int _lastEntryId = 0;
         private int _lastTransactionId = 0;
 
         public int CurrentSize => _uncommitedEvents.Count;
@@ -40,16 +40,15 @@ namespace Analytics
             var uncommitedEventsJson = PlayerPrefs.GetString(UncommitedEventsKey, "");
             _uncommitedEvents = new SortedList<int, BatchEntry>();
 
-            if (string.IsNullOrEmpty(uncommitedEventsJson) is false)
+            if (string.IsNullOrEmpty(uncommitedEventsJson)) return;
+            
+            var entries = JsonConvert.DeserializeObject<List<BatchEntry>>(uncommitedEventsJson);
+            foreach (var entry in entries)
             {
-                var entries = JsonConvert.DeserializeObject<List<BatchEntry>>(uncommitedEventsJson);
-                foreach (var entry in entries)
-                {
-                    _uncommitedEvents.Add(entry.Id, entry);
-                }
-                
-                _lastEventId = entries.Max(x => x.Id);
+                _uncommitedEvents.Add(entry.Id, entry);
             }
+                
+            _lastEntryId = entries.Max(x => x.Id);
         }
         
         public void RollbackTransaction(int transactionId)
@@ -80,8 +79,8 @@ namespace Analytics
 
         public void Store(T @event)
         {
-            _lastEventId++;
-            _uncommitedEvents.Add(_lastEventId, new BatchEntry(_lastEventId, @event));
+            _lastEntryId++;
+            _uncommitedEvents.Add(_lastEntryId, new BatchEntry(_lastEntryId, @event));
             SaveUncommitedEvents();
         }
         

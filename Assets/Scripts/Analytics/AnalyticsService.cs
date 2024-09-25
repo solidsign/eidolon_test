@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -39,9 +38,9 @@ namespace Analytics
     {
         [SerializeField] private float _sendPeriodSeconds = 3f;
         [SerializeField] private string _serverUrl; 
-        // по хорошему должен быть из внешнего конфига, но т.к вы написали,
+        // по хорошему это должно быть из внешнего конфига, но т.к вы написали,
         // что не стоит делать никаких бутстрапов,
-        // то решил сделать конфигурацию просто через сериализованное поле
+        // то решил сделать конфигурацию просто через сериализованные поля
 
         private readonly BatchStorage<AnalyticsServiceEventData> _batchStorage = new();
         private float _lastSendTime = 0f;
