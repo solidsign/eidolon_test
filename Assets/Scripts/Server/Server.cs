@@ -6,17 +6,18 @@ using UnityEngine.Networking;
 
 namespace Server
 {
-    public abstract class ServerBase : MonoBehaviour
+    public interface IServer
     {
-        public abstract IEnumerator SendPostRequest<T>(string url, T data, Action onSuccess, Action onError);
+        IEnumerator SendPostRequest<T>(string url, T data, Action onSuccess, Action onError);
     }
     
-    public class Server : ServerBase
+    [Serializable]
+    public class Server : IServer
     {
         [SerializeField] private bool _sendActualRequests = false;
         [SerializeField] private bool _returnSuccess = true;
         
-        public override IEnumerator SendPostRequest<T>(string url, T data, Action onSuccess, Action onError)
+        public IEnumerator SendPostRequest<T>(string url, T data, Action onSuccess, Action onError)
         {
             if (_sendActualRequests is false)
             {

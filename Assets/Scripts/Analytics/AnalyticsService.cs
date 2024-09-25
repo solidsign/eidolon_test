@@ -2,9 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Server;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace Analytics
 {
@@ -28,6 +26,11 @@ namespace Analytics
             EventName = eventName;
             Data = data;
         }
+
+        public override string ToString()
+        {
+            return $"EventName: {EventName}, Data: {Data}";
+        }
     }
 
     public interface IAnalyticsService
@@ -37,7 +40,7 @@ namespace Analytics
     
     public class AnalyticsService : MonoBehaviour, IAnalyticsService
     {
-        [SerializeField] private ServerBase _server; // Засунул сюда, чтобы не мудрить с DI и иметь возможность тестирования
+        [SerializeField] private Server.Server _server; // Засунул сюда, чтобы не мудрить с DI и было проще тестировать
         [Space]
         [SerializeField] private float _cooldownBeforeSendSeconds = 3f;
         [SerializeField] private string _serverUrl; 
@@ -45,11 +48,14 @@ namespace Analytics
         // что не стоит делать никаких бутстрапов,
         // то решил сделать конфигурацию просто через сериализованные поля
 
-        private readonly BatchStorage<AnalyticsServiceEventData> _batchStorage = new();
+        private BatchStorage<AnalyticsServiceEventData> _batchStorage;
         private Coroutine _currentSendRoutine = null;
+        
+        private const string UncommitedEntriesKey = "Analytics.UncommitedEntries";
 
         private void Awake()
         {
+            _batchStorage = new(UncommitedEntriesKey);
             if (_batchStorage.CurrentSize > 0)
             {
                 _currentSendRoutine = StartCoroutine(TrySendBatch(0f));
@@ -74,14 +80,16 @@ namespace Analytics
             var requestData = new AnalyticServiceEventsBatch(events);
             
             yield return TrySendBatch(requestData, 
-                onSuccess: () => _batchStorage.CommitTransaction(transactionId), 
+                onSuccess: () =>
+                {
+                    _batchStorage.CommitTransaction(transactionId);
+                    _currentSendRoutine = null;
+                }, 
                 onError: () =>
                 {
                     _batchStorage.RollbackTransaction(transactionId);
                     _currentSendRoutine = StartCoroutine(TrySendBatch(_cooldownBeforeSendSeconds)); // retry
                 });
-
-            _currentSendRoutine = null;
         }
 
         private IEnumerator TrySendBatch(AnalyticServiceEventsBatch requestData, Action onSuccess, Action onError)

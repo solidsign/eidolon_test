@@ -25,72 +25,88 @@ namespace Analytics
             }
         }
         
-        private const string UncommitedEventsKey = "Analytics.UncommitedEvents";
-        
-        private SortedList<int, BatchEntry> _uncommitedEvents;
-        private readonly Dictionary<int /* transactionId */, SortedList<int, BatchEntry>> _consumedEvents = new();
-        
+        private SortedList<int, BatchEntry> _uncommitedEntries;
+        private readonly Dictionary<int /* transactionId */, SortedList<int, BatchEntry>> _consumedEntries = new();
+
+        private readonly string _uncommitedEntriesKey;
+
         private int _lastEntryId = 0;
         private int _lastTransactionId = 0;
 
-        public int CurrentSize => _uncommitedEvents.Count;
+        public int CurrentSize => _uncommitedEntries.Count;
 
-        public BatchStorage()
+        public BatchStorage(string uncommitedEntriesKey)
         {
-            var uncommitedEventsJson = PlayerPrefs.GetString(UncommitedEventsKey, "");
-            _uncommitedEvents = new SortedList<int, BatchEntry>();
+            _uncommitedEntriesKey = uncommitedEntriesKey;
+            
+            var uncommitedEventsJson = PlayerPrefs.GetString(_uncommitedEntriesKey, "");
+            _uncommitedEntries = new SortedList<int, BatchEntry>();
 
             if (string.IsNullOrEmpty(uncommitedEventsJson)) return;
             
             var entries = JsonConvert.DeserializeObject<List<BatchEntry>>(uncommitedEventsJson);
             foreach (var entry in entries)
             {
-                _uncommitedEvents.Add(entry.Id, entry);
+                _uncommitedEntries.Add(entry.Id, entry);
             }
-                
-            _lastEntryId = entries.Max(x => x.Id);
+
+            if (_uncommitedEntries.Any())
+                _lastEntryId = _uncommitedEntries.Last().Key;
         }
-        
+
+
         public void RollbackTransaction(int transactionId)
         {
-            if (_consumedEvents.TryGetValue(transactionId, out var events) is false) return;
+            if (_consumedEntries.TryGetValue(transactionId, out var events) is false) return;
             
             foreach (var (key, value) in events)
             {
-                _uncommitedEvents.Add(key, value);
+                _uncommitedEntries.Add(key, value);
             }
 
-            _consumedEvents.Remove(transactionId);
+            _consumedEntries.Remove(transactionId);
+            
+            Debug.Log($"Rollback transaction {transactionId}. Events: {string.Join("\n", events.Values.Select(x => x.Entry.ToString()))}");
         }
         
         public (int transactionId, IEnumerable<T> events) Consume()
         {
             var transactionId = _lastTransactionId++;
-            _consumedEvents[transactionId] = _uncommitedEvents;
-            _uncommitedEvents = new();
+            
+            Debug.Log($"Consume. Transaction:{transactionId}. Events: {string.Join("\n", _uncommitedEntries.Values.Select(x => x.Entry.ToString()))}");
 
-            return (transactionId, _consumedEvents[transactionId].Values.Select(x => x.Entry));
+            _consumedEntries[transactionId] = _uncommitedEntries;
+            _uncommitedEntries = new();
+            
+
+            return (transactionId, _consumedEntries[transactionId].Values.Select(x => x.Entry));
         }
         
         public void CommitTransaction(int transactionId)
         {
-            _consumedEvents.Remove(transactionId);
+            Debug.Log($"Commit transaction {transactionId}. Entries: \n{string.Join("\n", _consumedEntries[transactionId].Values.Select(x => x.Entry.ToString()))}");
+            _consumedEntries.Remove(transactionId);
+            SaveUncommitedEntries();
         }
 
-        public void Store(T @event)
+        public void Store(T entry)
         {
             _lastEntryId++;
-            _uncommitedEvents.Add(_lastEntryId, new BatchEntry(_lastEntryId, @event));
-            SaveUncommitedEvents();
+            _uncommitedEntries.Add(_lastEntryId, new BatchEntry(_lastEntryId, entry));
+            Debug.Log($"Stored entry: {entry.ToString()}");
+            SaveUncommitedEntries();
         }
         
-        private void SaveUncommitedEvents()
+        private void SaveUncommitedEntries()
         {
-            var allUncommitedEntries = _consumedEvents.Values.SelectMany(x => x.Values)
-                .Concat(_uncommitedEvents.Values)
+            var allUncommitedEntries = _consumedEntries.Values.SelectMany(x => x.Values)
+                .Concat(_uncommitedEntries.Values)
                 .ToList();
+
+            var data = JsonConvert.SerializeObject(allUncommitedEntries);
+            PlayerPrefs.SetString(_uncommitedEntriesKey, data);
             
-            PlayerPrefs.SetString(UncommitedEventsKey, JsonConvert.SerializeObject(allUncommitedEntries));
+            Debug.Log($"Saved uncommited to prefs: {data}");
         }
     }
 }
