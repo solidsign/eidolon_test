@@ -45,6 +45,14 @@ namespace Analytics
         private readonly BatchStorage<AnalyticsServiceEventData> _batchStorage = new();
         private Coroutine _currentSendRoutine = null;
 
+        private void Awake()
+        {
+            if (_batchStorage.CurrentSize > 0)
+            {
+                _currentSendRoutine = StartCoroutine(TrySendBatch(0f));
+            }
+        }
+
         public void TrackEvent(IAnalyticsEvent @event)
         {
             _batchStorage.Store(new AnalyticsServiceEventData(@event.GetEventName(), JsonConvert.SerializeObject(@event)));
