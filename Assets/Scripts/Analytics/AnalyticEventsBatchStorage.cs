@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace Analytics
 {
-    public class AnalyticEventsBatch
+    public class AnalyticEventsBatchStorage
     {
         private SortedDictionary<int /* порядковый номер */, IAnalyticsEvent> _uncommitedEvents = new();
         private readonly Dictionary<int /* номер транзакции */, SortedDictionary<int /* порядковый номер */, IAnalyticsEvent>> _consumedEvents = new();
@@ -11,6 +11,8 @@ namespace Analytics
         private int _lastEventId = 0;
         private int _lastTransactionId = 0;
 
+        public int CurrentSize => _uncommitedEvents.Count;
+        
         public void RollbackTransaction(int transactionId)
         {
             if (_consumedEvents.TryGetValue(transactionId, out var events) is false) return;

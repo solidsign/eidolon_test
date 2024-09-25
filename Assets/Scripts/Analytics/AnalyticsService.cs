@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -27,34 +29,60 @@ namespace Analytics
             Data = data;
         }
     }
-    
-    public class AnalyticsService : MonoBehaviour
+
+    public interface IAnalyticsService
     {
+        void TrackEvent(IAnalyticsEvent @event);
+    }
+    
+    public class AnalyticsService : MonoBehaviour, IAnalyticsService
+    {
+        [SerializeField] private float _sendPeriodSeconds = 3f;
         [SerializeField] private string _serverUrl; 
         // по хорошему должен быть из внешнего конфига, но т.к вы написали,
         // что не стоит делать никаких бутстрапов,
         // то решил сделать конфигурацию просто через сериализованное поле
 
-        public void TrackEvent(IAnalyticsEvent @event)
-        {
-            var eventName = @event.GetEventName();
-            var requestData = new AnalyticsServiceEventData(eventName, @event);
+        private readonly AnalyticEventsBatchStorage _batchStorage = new();
+        private float _lastSendTime = 0f;
 
-            StartCoroutine(TrySendBatch(new AnalyticServiceEventsBatch(new[] { requestData })));
+        private void Update()
+        {
+            if (_lastSendTime + _sendPeriodSeconds > Time.time) return;
+
+            _lastSendTime = Time.time;
+            
+            if (_batchStorage.CurrentSize > 0) StartCoroutine(TrySendBatch());
         }
 
-        private IEnumerator TrySendBatch(AnalyticServiceEventsBatch requestData)
+        public void TrackEvent(IAnalyticsEvent @event)
+        {
+            _batchStorage.Store(@event);
+        }
+
+        private IEnumerator TrySendBatch()
+        {
+            var (transactionId, events) = _batchStorage.Consume();
+            
+            var requestData = new AnalyticServiceEventsBatch(events.Select(x => new AnalyticsServiceEventData(x.GetEventName(), x)));
+            
+            yield return TrySendBatch(requestData, 
+                onSuccess: () => _batchStorage.CommitTransaction(transactionId), 
+                onError: () => _batchStorage.RollbackTransaction(transactionId));
+        }
+
+        private IEnumerator TrySendBatch(AnalyticServiceEventsBatch requestData, Action onSuccess, Action onError)
         {
             using var request = UnityWebRequest.Post(_serverUrl, JsonConvert.SerializeObject(requestData));
             yield return request.SendWebRequest();
             
             if (request.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogError(request.error);
+                onSuccess?.Invoke();
             }
             else
             {
-                Debug.Log("Form upload complete!");
+                onError?.Invoke();
             }
         }
     }
